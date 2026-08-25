@@ -1,0 +1,181 @@
+
+## Orden de dificultad:
+
+    Persona 1: red y núcleo
+    Persona 3: canales y comandos avanzados
+    Persona 2: usuarios y comandos básicos
+
+--------------------------------------------------------------------------------
+
+# Persona 1 — Red y núcleo del servidor
+
+  Es la persona que monta la base técnica del proyecto.
+  Se encarga de:
+
+   - crear el socket del servidor
+   - aceptar clientes
+   - manejar múltiples conexiones
+   - usar poll o select
+   - leer y escribir sin bloquear
+   - gestionar buffers por cliente
+   - cerrar conexiones correctamente
+
+  Es la parte más difícil porque:
+
+   - es la base de todo el proyecto
+   - si falla, todo lo demás falla
+   - hay muchos casos límite de red
+
+--------------------------------------------------------------------------------
+
+# Persona 2 — Usuarios y comandos básicos
+
+  Es la persona que gestiona la lógica del cliente y los comandos iniciales.
+  Se encarga de:
+
+   - autenticación
+   - NICK
+   - USER
+   - QUIT
+   - PRIVMSG
+   - JOIN
+   - PART
+   - parsing básico de comandos
+
+  Es una parte intermedia porque:
+
+   - depende de la red funcionando
+   - tiene lógica clara, pero necesita integración con canales
+
+--------------------------------------------------------------------------------
+
+# Persona 3 — Canales y comandos avanzados
+
+  Es la persona que trabaja la parte más relacionada con la lógica de chat.
+  Se encarga de:
+
+   - crear y gestionar canales
+   - lista de miembros
+   - operadores
+   - TOPIC
+   - KICK
+   - INVITE
+   - MODE
+   - mensajes a canal
+
+  Es difícil porque:
+
+   - hay muchas reglas
+   - hay permisos y estados distintos
+   - depende bastante de usuarios ya definidos
+
+================================================================================
+
+## Tener en cuenta antes de empezar
+
+# Persna 2 y Persona 3
+
+  Se debe acordar como gestionar lo siguiente:
+  
+   - qué guarda un cliente
+   - qué guarda un canal
+   - cómo se parsean los comandos
+   - quién valida permisos
+   - cómo se actualizan usuarios y canales
+
+--------------------------------------------------------------------------------
+
+[1]. Estructura de Client
+
+     Qué datos tendrá cada usuario:
+
+      - fd
+      - nickname
+      - username
+      - autenticado o no
+      - canales en los que participa
+
+[2]. Estructura de Channel
+
+     Qué guarda cada canal:
+
+      - nombre
+      - topic
+      - miembros
+      - operadores
+      - clave
+      - límite de usuarios
+      - modos activos
+
+[3]. Formato interno de comandos
+
+     Cómo se representará un comando una vez parseado:
+
+      - nombre del comando
+      - argumentos
+      - target
+      - mensaje final
+
+[4]. Estado de autenticación
+
+     Cuándo un cliente se considera listo para usar IRC:
+
+      - password correcta
+      - nick válido
+      - username válido
+
+[5]. Flujo de JOIN
+
+     Quién valida qué pasa al entrar a un canal:
+
+      - si el canal existe o se crea
+      - si requiere clave
+      - si está lleno
+      - cómo se añade el cliente
+
+[6]. Flujo de PRIVMSG
+
+     Cómo se envían mensajes:
+
+      - si el destino es un usuario o un canal
+      - quién valida el target
+      - quién reenvía el mensaje
+
+[7]. Reglas de permisos
+
+     Quién comprueba:
+
+      - si alguien puede usar KICK
+      - si puede cambiar TOPIC
+      - si es operador
+
+[8]. Formato de errores y respuestas
+
+     Qué respuestas IRC se enviarán en cada caso:
+
+      - usuario no autenticado
+      - canal inexistente
+      - falta clave
+      - no eres operador
+      - usuario no encontrado
+
+[9]. Funciones compartidas
+
+     Qué helpers van a reutilizar:
+
+      - buscar usuario
+      - buscar canal
+      - validar nick
+      - enviar mensajes
+      - añadir/quitar miembros
+
+[10]. Actualización de relaciones cliente-canal
+
+      Cómo se sincroniza:
+
+      - cuando un usuario entra
+      - cuando sale
+      - cuando se desconecta
+      - cuando un canal queda vacío
+
+
