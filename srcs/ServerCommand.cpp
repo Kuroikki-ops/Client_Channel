@@ -6,7 +6,7 @@
 /*   By: diespino <diespino@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/11/03 18:51:17 by diespino          #+#    #+#             */
-/*   Updated: 2026/11/03 19:52:29 by diespino         ###   ########.fr       */
+/*   Updated: 2026/11/04 18:30:29 by diespino         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -14,47 +14,66 @@
 
 void	Server::handleJoin(Client& client, parsedCmd& cmd) {
 
-//	Necesito revisar si:
-//		# cliente esta registrado
-//		# revisar parametros
-//		# CHANNEL_NAME es valido ('#', '&'?, <alguno mas>)
-//
-//	MSG_ERROR.cpp ???
-//
-	if (cmd.params.empty())
+	if (!client.isRegistered())
 	{
-		reply( client, ":server 461 " + client.getNick() + " JOIN :Not enough parameters");
+		ErrClient(client, 451, ERR_NOTREGISTERED);
 		return ;
 	}
-	if (cmd.params[0][0] != '#')
+	if (cmd.params.empty() || cmd.params[0].empty())
 	{
-		reply( client, ":server 403 " + client.getNick() + " " + cmd.params[0] + " :No such channel");
+		ErrCmd(client, 461, cmd.cmd, ERR_NEEDMOREPARAMS);
 		return ;
 	}
-//
-//	Comprobar si:
-//		# cliente ya es mienbro
-//		# canal invite-only
-//		# canal tiene key
-//		# se alcanzo el limite del channel
-//		# eliminar invitacion si la tenia
-//
+	if (cmd.params[0].size() < 2 || cmd.params[0][0] != '#')
+	{
+		ErrChannel(client, cmd.params[0], 403, ERR_NOSUCHCHANNEL);
+		return ;
+	}
+
 	Channel* chan = getChannel(cmd.params[0]);
+
 	if ( chan == NULL )
 	{
 		chan = createChannel(cmd.params[0]);
-		if (chan == NULL)// MSG ERROR ???
+		if (chan == NULL)// MSG_ERROR ???
 			return ;
-		chan->addOperator(client.getFd());// first joiner becomes operator
+		chan->addOperator(client.getFd());
 	}
-	chan->addMember( client.getFd() );
+	if (chan->getLimit() != 0 && chan->memberCount() == chan->getLimit())
+	{
+		ErrChannel(client, chan->getName(), 471, ERR_CHANNELISFULL);
+		return ;
+	}
+	if (chan->isInviteOnly())
+	{
+		if (!chan->isInvited(client.getFd()))
+		{
+			ErrChannel(client, chan->getName(), 473, ERR_INVITEONLYCHAN);
+			return ;
+		}
+		chan->removeInvite(client.getFd());
+	}
+	if (chan->hasKey())
+	{
+		if (cmd.params.size() < 2 || cmd.params[1] != chan->getKey())
+		{
+			ErrChannel(client, chan->getName(), 475, ERR_BADCHANNELKEY);
+			return ;
+		}
+	}
+	if (chan->isInvited(client.getFd()))
+		chan->removeInvite(client.getFd());
 //
-//	Enviar mensaje de JOINED a todos los clientes del CHANNEL
-//
-	std::ostringstream fd;
-	fd << client.getFd();
+//	Enviar mensaje de JOINED a todos los clientes (incluido al nuevo miembro) del CHANNEL
+	if (!chan->isMember(client.getFd()))
+	{
+		std::ostringstream	msg;
 
-//	No deberia ser chan, user/nick + joined + CHANNEL_NAME??
-	broadcast( *chan, "fd " + fd.str() + " joined " + chan->getName(), -1 );
+		chan->addMember(client.getFd());
+//		Flata hacere prefix de client --> :nick!user@hostname
+//		msg << clientPrefix(client) << " JOIN " << chan->getName();
+		msg << ":nick!user@hostname JOIN " << chan->getName();
+		broadcast( *chan, msg.str(), -1 );
+	}
 	return ;
 }

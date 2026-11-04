@@ -233,14 +233,9 @@ void    Server::removeClient(size_t i)
 
 parsedCmd	Server::parseCommand(const std::string &line) {
 
-//	separar comando --> command.cmd
-//	separar params  --> command.params[0]
-//			--> command.params[1]
-//			--> command.params[2]
-//			--> command.params["]
 	std::istringstream	input(line);
-	std::string			token;
-	parsedCmd			command;
+	std::string		token;
+	parsedCmd		command;
 
 	input >> command.cmd;
 
@@ -248,63 +243,46 @@ parsedCmd	Server::parseCommand(const std::string &line) {
 	{
 		if (token[0] == ':')
 		{
+			std::string	trailing = token.substr(1);
 			std::string	tmp;
 
 			std::getline(input, tmp);
-			command.params.push_back(token + tmp);
-			break;
+			if (!tmp.empty() && tmp[0] == ' ')
+				tmp.erase(0, 1);
+			command.params.push_back(trailing + tmp);
+			break ;
 		}
 		command.params.push_back(token);
 	}
 	return (command);
 }
 
-void    Server::handleCommand(Client& client, const std::string& line) //garantizado que recibe una linia completa :D
+void    Server::handleCommand(Client& client, const std::string& line)
 {
 	parsedCmd	cmd = parseCommand(line);
 
+//	Mientras no haya USER, NICK Y PASS comentar lineas 256 <--> 270 para probar CMDs
+//	Tambien hacer con comandos como JOIN que comprueban si client.isRegistered()
+//
+	if (cmd.cmd != "PASS" && cmd.cmd != "NICK" && cmd.cmd != "USER"
+			&& cmd.cmd != "QUIT" && !client.isRegistered())
+	{
+		ErrClient(client, 451, ERR_NOTREGISTERED);
+		return ;
+	}
 	if (cmd.cmd == "JOIN")
-    {
+	{
 		handleJoin(client, cmd);
 		return ;
 	}
 	
-    if ( cmd.cmd == "QUIT" )
-    {
-        reply( client, "ERROR :Closing link" );
-        client.markForDisconnect();
-        return ;
-    }
-    reply( client, "echo: " + line );
-
-/*    // test channels
-    if ( line.compare( 0, 5, "JOIN " ) == 0 )
-    {
-        std::string name = line.substr( 5 );
-        Channel* chan = getChannel( name );
-        if ( chan == NULL )
-        {
-            chan = createChannel( name );
-            if ( chan == NULL )
-                return ;
-            chan->addOperator( client.getFd() );   // first joiner becomes operator
-        }
-        chan->addMember( client.getFd() );
-
-        std::ostringstream fd;
-        fd << client.getFd();
-        broadcast( *chan, "fd " + fd.str() + " joined " + chan->getName(), -1 );
-        return ;
-    }
-
-    if ( line == "QUIT" ) //test quit
-    {
-        reply( client, "ERROR :Closing link" );
-        client.markForDisconnect();
-        return ;
-    }
-    reply( client, "echo: " + line ); //test comm
-*/
+	if ( cmd.cmd == "QUIT" )
+	{
+		reply( client, "ERROR :Closing link" );
+		client.markForDisconnect();
+		return ;
+	}
+	reply( client, "echo: " + line );
 }
 
 void    Server::setPollOut(int fd, bool on)
