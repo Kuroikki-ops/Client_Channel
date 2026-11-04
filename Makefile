@@ -10,7 +10,8 @@ SRCS		= $(SRC_DIR)/main.cpp \
 				$(SRC_DIR)/Server.cpp \
 				$(SRC_DIR)/ServerCommand.cpp \
 				$(SRC_DIR)/Client.cpp \
-				$(SRC_DIR)/Channel.cpp
+				$(SRC_DIR)/Channel.cpp\
+				$(SRC_DIR)/ErrorMsg.cpp
 
 OBJS     = $(SRCS:$(SRC_DIR)/%.cpp=$(OBJ_DIR)/%.o)
 DEPS     = $(OBJS:.o=.d)

@@ -87,11 +87,29 @@ JOIN debe:
 
 Errores relevantes:
 
-    403 ERR_NOSUCHCHANNEL
-    405 ERR_TOOMANYCHANNELS
-    471 ERR_CHANNELISFULL
-    473 ERR_INVITEONLYCHAN
-    475 ERR_BADCHANNELKEY
+	# 403 ERR_NOSUCHCHANNEL
+	# 405 ERR_TOOMANYCHANNELS
+	# 451 ERR_ (not registered)
+	# 461 ERR_ (not enough params)
+	# 471 ERR_CHANNELISFULL
+	# 473 ERR_INVITEONLYCHAN
+	X 474 ERR_BANNEDFROMCHAN
+	# 475 ERR_BADCHANNELKEY
+	? 476 ERR_BADCHANMASK
+
+Code	Nombre			Mensaje habitual
+403	ERR_NOSUCHCHANNEL	No such channel
+404	ERR_CANNOTSENDTOCHAN	Cannot send to channel
+441	ERR_USERNOTINCHANNEL	They aren't on that channel
+442	ERR_NOTONCHANNEL	You're not on that channel
+443	ERR_USERONCHANNEL	is already on channel
+461	ERR_NEEDMOREPARAMS	Not enough parameters
+471	ERR_CHANNELISFULL	Cannot join channel (+l)
+472	ERR_UNKNOWNMODE		is unknown mode char to me
+473	ERR_INVITEONLYCHAN	Cannot join channel (+i)
+474	ERR_BANNEDFROMCHAN	Cannot join channel (+b)
+475	ERR_BADCHANNELKEY	Cannot join channel (+k)
+482	ERR_CHANOPRIVSNEEDED	You're not channel operator
 
 El canal debe aceptar nombres como #42, pero rechazar nombres vacios o
 invalidos.
