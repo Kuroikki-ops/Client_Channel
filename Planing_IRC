@@ -36,7 +36,7 @@ Ressources
   Es la persona que gestiona la lógica del cliente y los comandos iniciales.
   Se encarga de:
 
-   - autenticación
+   - PASS autenticación
    - NICK
    - USER
    - QUIT
