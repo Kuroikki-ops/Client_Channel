@@ -63,7 +63,7 @@ class Server {
 //	COMMANDS
 		parsedCmd	parseCommand(const std::string &line);
 		void		handleJoin(Client& client, parsedCmd& cmd);
-
+		void        handlePass(Client& client, parsedCmd& cmd);
     public:
         Server(int port, const std::string& pwd);
         ~Server(void);
