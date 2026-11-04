@@ -1,0 +1,366 @@
+
+GUIA PARA TERMINAR LA PARTE DE CHANNEL EN FT_IRC
+================================================
+
+
+1. ENTENDER EL MODELO DE DATOS
+-------------------------------
+
+Antes de programar, hay que tener claro:
+
+- Server posee todos los Client y Channel.
+- Channel solo almacena el estado del canal:
+  - miembros;
+  - operadores;
+  - invitados;
+  - topic;
+  - key/password;
+  - limite de usuarios;
+  - modos.
+- Server ejecuta la logica:
+  - valida comandos;
+  - comprueba permisos;
+  - busca clientes;
+  - envia respuestas;
+  - modifica los canales.
+- Client almacena identidad, buffers y estado de registro.
+
+Channel no deberia conocer directamente a Server ni enviar mensajes por
+si mismo.
+
+
+2. CREAR HELPERS COMUNES
+------------------------
+
+Antes de implementar comandos, prepara helpers en Server:
+
+    std::string clientPrefix(const Client& client);
+    void sendToChannel(Channel&, const std::string&, int exceptFd);
+    bool isValidChannelName(const std::string&);
+    bool isRegistered(const Client&);
+
+El prefijo IRC debe tener este formato:
+
+    :nick!user@hostname
+
+Todos los mensajes deben terminar en:
+
+    \r\n
+
+Tambien conviene crear helpers para respuestas numericas:
+
+    :server 403 nick #channel :No such channel\r\n
+    :server 442 nick #channel :You're not on that channel\r\n
+    :server 482 nick #channel :You're not channel operator\r\n
+
+
+3. TERMINAR JOIN
+----------------
+
+JOIN debe implementarse primero, porque todos los demas comandos dependen
+de que los miembros esten correctamente registrados.
+
+Ejemplo:
+
+    JOIN #canal
+    JOIN #canal password
+
+JOIN debe:
+
+1. Validar el nombre del canal.
+2. Comprobar si existe; si no, crearlo.
+3. Si es nuevo, hacer operador al primer usuario.
+4. Comprobar:
+   - si el cliente ya es miembro;
+   - si el canal es invite-only;
+   - si necesita key;
+   - si se alcanzo el limite.
+5. Anadir el cliente.
+6. Consumir su invitacion, si existia.
+7. Enviar el JOIN a los miembros.
+8. Enviar el topic:
+   - RPL_NOTOPIC si esta vacio;
+   - RPL_TOPIC si existe.
+9. Enviar la lista de usuarios:
+   - RPL_NAMREPLY;
+   - RPL_ENDOFNAMES.
+
+Errores relevantes:
+
+    403 ERR_NOSUCHCHANNEL
+    405 ERR_TOOMANYCHANNELS
+    471 ERR_CHANNELISFULL
+    473 ERR_INVITEONLYCHAN
+    475 ERR_BADCHANNELKEY
+
+El canal debe aceptar nombres como #42, pero rechazar nombres vacios o
+invalidos.
+
+
+4. IMPLEMENTAR PART
+-------------------
+
+Formato:
+
+    PART #canal :motivo
+
+Orden recomendado:
+
+1. Buscar el canal.
+2. Comprobar que el cliente es miembro.
+3. Crear el mensaje PART.
+4. Enviarlo a todos los miembros, incluido el que sale.
+5. Eliminar al cliente del canal.
+6. Borrar el canal si queda vacio.
+
+Errores:
+
+    403 ERR_NOSUCHCHANNEL
+    442 ERR_NOTONCHANNEL
+
+
+5. IMPLEMENTAR PRIVMSG PARA CANALES
+-----------------------------------
+
+Formato:
+
+    PRIVMSG #canal :Hola
+
+Debe:
+
+1. Validar que el mensaje tenga receptor y texto.
+2. Buscar el canal.
+3. Comprobar que el emisor pertenece al canal.
+4. Enviar a todos excepto al emisor.
+5. Mantener el texto completo despues de ':'.
+
+Error importante:
+
+    404 ERR_CANNOTSENDTOCHAN
+
+Aunque otra persona haga la parte de Client, la logica de envio a canales
+debe quedar correctamente conectada con Server.
+
+
+6. IMPLEMENTAR TOPIC
+--------------------
+
+Lectura:
+
+    TOPIC #canal
+
+Cambio:
+
+    TOPIC #canal :Nuevo topic
+
+Hay que comprobar:
+
+- que el canal exista;
+- que el usuario sea miembro;
+- si +t esta activo, que sea operador.
+
+Respuestas:
+
+    331 RPL_NOTOPIC
+    332 RPL_TOPIC
+    482 ERR_CHANOPRIVSNEEDED
+
+Cuando se cambia el topic, hay que notificar a todos los miembros.
+
+
+7. IMPLEMENTAR INVITE
+---------------------
+
+Formato:
+
+    INVITE nick #canal
+
+Comprobaciones:
+
+1. El nick existe.
+2. El canal existe.
+3. El invitador pertenece al canal.
+4. El invitador es operador si tu implementacion exige permisos.
+5. El objetivo no esta ya dentro.
+6. Anadir el fd a _invited.
+7. Enviar la notificacion al usuario invitado.
+
+Errores tipicos:
+
+    401 ERR_NOSUCHNICK
+    403 ERR_NOSUCHCHANNEL
+    442 ERR_NOTONCHANNEL
+    443 ERR_USERONCHANNEL
+    482 ERR_CHANOPRIVSNEEDED
+
+Despues, JOIN debe aceptar al usuario invitado aunque el canal tenga +i.
+
+
+8. IMPLEMENTAR KICK
+-------------------
+
+Formato:
+
+    KICK #canal nick :motivo
+
+Debe:
+
+1. Verificar que el canal existe.
+2. Verificar que el ejecutor esta dentro.
+3. Verificar que es operador.
+4. Buscar el objetivo.
+5. Verificar que el objetivo pertenece al canal.
+6. Notificar el KICK.
+7. Eliminarlo del canal.
+8. Borrar el canal si queda vacio.
+
+Errores:
+
+    401 ERR_NOSUCHNICK
+    403 ERR_NOSUCHCHANNEL
+    441 ERR_USERNOTINCHANNEL
+    442 ERR_NOTONCHANNEL
+    482 ERR_CHANOPRIVSNEEDED
+
+
+9. IMPLEMENTAR MODE
+-------------------
+
+Para canales, implementar estos modos:
+
+    +i / -i       Solo invitados pueden entrar
+    +t / -t       Solo operadores cambian el topic
+    +k key / -k   Password del canal
+    +o nick / -o  Dar o quitar operador
+    +l numero     Limite de usuarios
+    -l            Quitar limite
+
+Ejemplos:
+
+    MODE #42
+    MODE #42 +it
+    MODE #42 +k secret
+    MODE #42 +o alice
+    MODE #42 +l 20
+    MODE #42 -k
+
+Primero implementa la consulta:
+
+    :server 324 nick #42 +it\r\n
+
+Despues implementa cambios y valida siempre que el ejecutor sea operador.
+
+Errores:
+
+    472 ERR_UNKNOWNMODE
+    461 ERR_NEEDMOREPARAMS
+    482 ERR_CHANOPRIVSNEEDED
+    467 ERR_KEYALREADYSET
+
+No permitas:
+
+- limites negativos;
+- +l sin numero;
+- +k sin password;
+- +o sin nick;
+- cambios de modo por usuarios sin permisos.
+
+
+10. CORREGIR DESCONEXIONES Y QUIT
+---------------------------------
+
+Cuando un cliente hace QUIT o se desconecta:
+
+1. Enviar QUIT a los canales donde estaba.
+2. Eliminarlo de miembros, operadores e invitaciones.
+3. Si era el unico operador, decidir una politica:
+   - transferir operador a otro miembro; o
+   - dejar el canal sin operador hasta que se recree.
+4. Borrar canales vacios.
+
+La opcion mas practica es hacer operador al primer miembro restante.
+
+
+CONCEPTOS QUE HAY QUE DOMINAR
+=============================
+
+1. El servidor recibe texto, no objetos.
+
+2. Un recv() puede contener:
+   - medio comando;
+   - varios comandos juntos.
+
+3. El parser debe conservar el parametro final:
+
+       PRIVMSG #42 :hola mundo
+
+   No sirve hacer simplemente split(" "), porque se perderia el texto
+   completo.
+
+4. Los nombres de canales y nicks suelen compararse sin distinguir
+   mayusculas y minusculas.
+
+5. Los mensajes dirigidos al canal normalmente se envian a todos excepto
+   al emisor.
+
+6. Las operaciones del canal deben ser consistentes:
+   - si un fd esta en _members, puede recibir mensajes;
+   - si esta en _operators, tambien deberia estar en _members;
+   - al salir, debe desaparecer de todos los sets;
+   - las invitaciones usadas deben eliminarse despues de JOIN.
+
+
+SEPARACION DE RESPONSABILIDADES
+===============================
+
+Channel:
+    Estado y operaciones simples sobre sets.
+
+Server:
+    Comandos, permisos, errores, prefijos y broadcasting.
+
+Client:
+    Identidad, buffers y estado de registro.
+
+
+ORDEN FINAL RECOMENDADO
+=======================
+
+1. Entender Channel, Client y Server.
+2. Terminar el parser y crear helpers de respuestas IRC.
+3. Terminar JOIN.
+4. Implementar PART.
+5. Implementar PRIVMSG a canales.
+6. Implementar TOPIC.
+7. Implementar INVITE.
+8. Implementar KICK.
+9. Implementar MODE.
+10. Corregir QUIT y desconexiones.
+11. Probar errores y casos limite.
+
+
+PRUEBAS RECOMENDADAS
+=====================
+
+Usa dos o tres clientes con nc o Weechat.
+
+Casos minimos:
+
+- Un usuario crea un canal.
+- Un segundo usuario entra.
+- Dos usuarios reciben un PRIVMSG.
+- Un usuario sale con PART.
+- El ultimo usuario sale y el canal se elimina.
+- JOIN con key correcta e incorrecta.
+- JOIN a canal invite-only.
+- JOIN cuando el canal esta lleno.
+- Cambiar y consultar TOPIC.
+- Intentar TOPIC sin ser operador cuando esta activo +t.
+- Dar y quitar operador con MODE.
+- INVITE y posterior JOIN.
+- KICK de un usuario.
+- Intentar acciones de operador sin ser operador.
+- Desconexion inesperada de un cliente.
+
+Implementa y prueba un comando cada vez. JOIN, PART y PRIVMSG forman la
+base para poder probar correctamente el resto.
